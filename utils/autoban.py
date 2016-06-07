@@ -33,6 +33,12 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--count', default=3, type=int,
                         help='with how many failure times it should be '
                              'considered as an attack')
+
+    parser.add_argument('-b', '--ban4ever', default='on', type=str,
+                        help='default on, banned ip forever forbidden. '
+                             'if set off, '
+                             'the banned ip may be back alive again')
+
     config = parser.parse_args()
     ips = {}
     banned = set()
@@ -45,9 +51,22 @@ if __name__ == '__main__':
                 sys.stdout.flush()
             else:
                 ips[ip] += 1
+                out_str = 'cat ip[%s] for %d time(s)' % (ip, ips[ip])
+                print(out_str)
+                sys.stdout.flush()
             if ip not in banned and ips[ip] >= config.count:
                 banned.add(ip)
                 cmd = 'iptables -A INPUT -s %s -j DROP' % ip
                 print(cmd, file=sys.stderr)
                 sys.stderr.flush()
                 os.system(cmd)
+
+                # ips[ip] now is in forever forbidden list
+                # if param let ips[ip] come alive again,
+                # remove it from forbidden list
+                if config.ban4ever == 'off':
+                    banned.remove(ips[ip])
+                    #out_str = 'wait for %s to come again.' % (ips[ip])
+                    del ips[ip]
+                    #print(out_str)
+                    sys.stdout.flush()
