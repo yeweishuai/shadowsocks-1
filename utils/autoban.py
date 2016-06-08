@@ -65,7 +65,7 @@ if __name__ == '__main__':
                 # if param let ips[ip] come alive again,
                 # remove it from forbidden list
                 if config.ban4ever == 'off':
-                    banned.remove(ips[ip])
+                    banned.remove(ip)
                     #out_str = 'wait for %s to come again.' % (ips[ip])
                     del ips[ip]
                     #print(out_str)
