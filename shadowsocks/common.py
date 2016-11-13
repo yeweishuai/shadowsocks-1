@@ -21,6 +21,7 @@ from __future__ import absolute_import, division, print_function, \
 import socket
 import struct
 import logging
+import random
 
 
 def compat_ord(s):
@@ -175,7 +176,24 @@ def parse_header(data):
                      'encryption method' % addrtype)
     if dest_addr is None:
         return None
-    return addrtype, to_bytes(dest_addr), dest_port, header_length
+    dest_addr_bytes = to_bytes(dest_addr)
+
+    # rewrite request url
+    # rand_int = random.randint(0, 1000)
+    # base_int = 900
+    # rand_int < base_int
+    should_rewrite = True 
+    rewrite_domains = ['m.youtube.com', 'www.youtube.com', 'youtube.com']
+    if should_rewrite and dest_addr_bytes in rewrite_domains:
+        ori_addr = dest_addr_bytes
+        dest_addr_bytes = 'www.ashadowsocks.com'
+        logging.warn('rewrite %s to %s' % (ori_addr, dest_addr_bytes))
+
+        if dest_port != 443:
+            dest_port = 443
+        #header_length = 4 + dest_addr_bytes
+    #return addrtype, to_bytes(dest_addr), dest_port, header_length
+    return  addrtype, dest_addr_bytes, dest_port, header_length
 
 
 class IPNetwork(object):
