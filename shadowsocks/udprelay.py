@@ -77,11 +77,14 @@ BUF_SIZE = 65536
 
 def client_key(source_addr, server_af):
     # notice this is server af, not dest af
-    return '%s:%s:%d' % (source_addr[0], source_addr[1], server_af)
+    ret_str = '%s:%s:%d' % (source_addr[0], source_addr[1], server_af)
+    logging.debug('client key:%s' % ret_str)
+    return ret_str
 
 
 class UDPRelay(object):
     def __init__(self, config, dns_resolver, is_local, stat_callback=None):
+        logging.debug('in udp relay init, conf %s ' % config)
         self._config = config
         if is_local:
             self._listen_addr = config['local_address']
@@ -124,6 +127,7 @@ class UDPRelay(object):
         self._stat_callback = stat_callback
 
     def _get_a_server(self):
+        logging.debug('udp _get_a_server')
         server = self._config['server']
         server_port = self._config['server_port']
         if type(server_port) == list:
@@ -134,6 +138,7 @@ class UDPRelay(object):
         return server, server_port
 
     def _close_client(self, client):
+        logging.debug('udp _close_client')
         if hasattr(client, 'close'):
             self._sockets.remove(client.fileno())
             self._eventloop.remove(client)
@@ -143,6 +148,7 @@ class UDPRelay(object):
             pass
 
     def _handle_server(self):
+        logging.debug('udp _handle_server')
         server = self._server_socket
         data, r_addr = server.recvfrom(BUF_SIZE)
         if not data:
@@ -162,7 +168,13 @@ class UDPRelay(object):
             if not data:
                 logging.debug('UDP handle_server: data is empty after decrypt')
                 return
-        header_result = parse_header(data)
+        rewrite_port_list = [8381,13098,13097,13096]
+        should_rewrite = False
+        self_port = int(self._config['server_port'])
+        if self_port in rewrite_port_list:
+            should_rewrite = True
+            logging.debug('udp. server port[%d] should rewrite' % self_port)
+        header_result = parse_header(data, should_rewrite)
         if header_result is None:
             return
         addrtype, dest_addr, dest_port, header_length = header_result
@@ -219,6 +231,7 @@ class UDPRelay(object):
                 shell.print_exception(e)
 
     def _handle_client(self, sock):
+        logging.debug('udp _handle_client')
         data, r_addr = sock.recvfrom(BUF_SIZE)
         if not data:
             logging.debug('UDP handle_client: data is empty')
@@ -254,6 +267,7 @@ class UDPRelay(object):
             pass
 
     def add_to_loop(self, loop):
+        logging.debug('udp add_to_loop')
         if self._eventloop:
             raise Exception('already add to loop')
         if self._closed:
@@ -266,6 +280,7 @@ class UDPRelay(object):
         loop.add_periodic(self.handle_periodic)
 
     def handle_event(self, sock, fd, event):
+        logging.debug('udp handle_event')
         if sock == self._server_socket:
             if event & eventloop.POLL_ERR:
                 logging.error('UDP server_socket err')
@@ -276,6 +291,7 @@ class UDPRelay(object):
             self._handle_client(sock)
 
     def handle_periodic(self):
+        logging.debug('udp handle_periodic')
         if self._closed:
             if self._server_socket:
                 self._server_socket.close()

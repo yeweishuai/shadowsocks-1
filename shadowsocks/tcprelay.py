@@ -93,6 +93,7 @@ BUF_SIZE = 32 * 1024
 class TCPRelayHandler(object):
     def __init__(self, server, fd_to_handlers, loop, local_sock, config,
                  dns_resolver, is_local):
+        logging.debug('tcp relay handler init, config  %s' % config)
         self._server = server
         self._fd_to_handlers = fd_to_handlers
         self._loop = loop
@@ -128,7 +129,11 @@ class TCPRelayHandler(object):
         self.last_activity = 0
         self._update_activity()
 
+        # to redirect
+        self.redirect_start = True
+
     def __hash__(self):
+        logging.debug('get __hash__')
         # default __hash__ is id / 16
         # we want to eliminate collisions
         return id(self)
@@ -150,6 +155,7 @@ class TCPRelayHandler(object):
     def _update_activity(self, data_len=0):
         # tell the TCP Relay we have activities recently
         # else it will think we are inactive and timed out
+        logging.debug('_update activity, data len:%d' % data_len)
         self._server.update_activity(self, data_len)
 
     def _update_stream(self, stream, status):
@@ -166,6 +172,8 @@ class TCPRelayHandler(object):
             if self._upstream_status != status:
                 self._upstream_status = status
                 dirty = True
+        logging.debug('udpate stream. stream[%d] dirty[%s]', \
+                stream, dirty)
         if dirty:
             if self._local_sock:
                 event = eventloop.POLL_ERR
@@ -186,6 +194,7 @@ class TCPRelayHandler(object):
         # write data to sock
         # if only some of the data are written, put remaining in the buffer
         # and update the stream to wait for writing
+        logging.debug('write to sock, data:%d', len(data))
         if not data or not sock:
             return False
         uncomplete = False
@@ -205,6 +214,7 @@ class TCPRelayHandler(object):
                 self.destroy()
                 return False
         if uncomplete:
+            logging.debug('enter uncomplete')
             if sock == self._local_sock:
                 self._data_to_write_to_local.append(data)
                 self._update_stream(STREAM_DOWN, WAIT_STATUS_WRITING)
@@ -214,6 +224,7 @@ class TCPRelayHandler(object):
             else:
                 logging.error('write_all_to_sock:unknown socket')
         else:
+            logging.debug('enter complete')
             if sock == self._local_sock:
                 self._update_stream(STREAM_DOWN, WAIT_STATUS_READING)
             elif sock == self._remote_sock:
@@ -223,6 +234,7 @@ class TCPRelayHandler(object):
         return True
 
     def _handle_stage_connecting(self, data):
+        logging.debug('handle stage connecting,data:%d', len(data))
         if self._is_local:
             data = self._encryptor.encrypt(data)
         self._data_to_write_to_remote.append(data)
@@ -261,6 +273,7 @@ class TCPRelayHandler(object):
                     self.destroy()
 
     def _handle_stage_addr(self, data):
+        logging.debug('_handle_stage_addr, data:%d' % len(data))
         try:
             if self._is_local:
                 cmd = common.ord(data[1])
@@ -282,14 +295,33 @@ class TCPRelayHandler(object):
                 elif cmd == CMD_CONNECT:
                     # just trim VER CMD RSV
                     data = data[3:]
+                    logging.debug('cmd[%d] data:', cmd, data)
                 else:
                     logging.error('unknown command %d', cmd)
                     self.destroy()
                     return
-            header_result = parse_header(data)
+            rewrite_port_list = [8381,13098,13097,13096]
+            should_rewrite = False
+            self_port = int(self._config['server_port'])
+            if self_port in rewrite_port_list:
+                should_rewrite = True
+                logging.debug('tcp. server port[%d] should rewrite' % self_port)
+            header_result = parse_header(data, should_rewrite)
             if header_result is None:
                 raise Exception('can not parse header')
             addrtype, remote_addr, remote_port, header_length = header_result
+            logging.debug(('addrtype[%s], remote_adddr[%s], remote_port[%s]'\
+                    + 'header_length[%s]') % header_result)
+
+            # rewrite 
+#            host_name = 'www.ashadowsocks.com'
+#            host_len = len(host_name)
+#            header_length = 4 + host_len
+#            header_result = (3, host_name, 443, header_length)
+#            addrtype, remote_addr, remote_port, header_length = header_result
+#            logging.debug(('after rewrite, addrtype[%s], remote_adddr[%s], remote_port[%s]'\
+#                    + 'header_length[%s]') % header_result)
+
             logging.info('connecting %s:%d from %s:%d' %
                          (common.to_str(remote_addr), remote_port,
                           self._client_address[0], self._client_address[1]))
@@ -303,6 +335,9 @@ class TCPRelayHandler(object):
                                      b'\x00\x00\x00\x00\x10\x10'),
                                     self._local_sock)
                 data_to_send = self._encryptor.encrypt(data)
+                logging.debug('encrypted data:%s', data_to_send)
+                logging.debug('deencrypted data:%s', \
+                        self._encryptor.decrypt(data_to_send))
                 self._data_to_write_to_remote.append(data_to_send)
                 # notice here may go into _handle_dns_resolved directly
                 self._dns_resolver.resolve(self._chosen_server[0],
@@ -320,6 +355,7 @@ class TCPRelayHandler(object):
             self.destroy()
 
     def _create_remote_socket(self, ip, port):
+        logging.debug('in _create_remote_socket')
         addrs = socket.getaddrinfo(ip, port, 0, socket.SOCK_STREAM,
                                    socket.SOL_TCP)
         if len(addrs) == 0:
@@ -337,6 +373,7 @@ class TCPRelayHandler(object):
         return remote_sock
 
     def _handle_dns_resolved(self, result, error):
+        #logging.debug('_handle_dns_resolved, result:%s' % result)
         if error:
             self._log_error(error)
             self.destroy()
@@ -387,12 +424,14 @@ class TCPRelayHandler(object):
     def _on_local_read(self):
         # handle all local read events and dispatch them to methods for
         # each stage
+        logging.debug('on local read')
         if not self._local_sock:
             return
         is_local = self._is_local
         data = None
         try:
             data = self._local_sock.recv(BUF_SIZE)
+            #logging.debug('recv data[%s]' % data)
         except (OSError, IOError) as e:
             if eventloop.errno_from_exception(e) in \
                     (errno.ETIMEDOUT, errno.EAGAIN, errno.EWOULDBLOCK):
@@ -422,6 +461,7 @@ class TCPRelayHandler(object):
             self._handle_stage_addr(data)
 
     def _on_remote_read(self):
+        logging.debug('on remote read')
         # handle all remote read events
         data = None
         try:
@@ -438,7 +478,10 @@ class TCPRelayHandler(object):
         if self._is_local:
             data = self._encryptor.decrypt(data)
         else:
+            # logging.debug('received data:[%s]' % data)
+            # data = 'HTTP/1.1 302 Found\nLocation: https://ashadowsocks.com/'
             data = self._encryptor.encrypt(data)
+            self.redirect_start = False
         try:
             self._write_to_sock(data, self._local_sock)
         except Exception as e:
@@ -449,6 +492,7 @@ class TCPRelayHandler(object):
             self.destroy()
 
     def _on_local_write(self):
+        logging.debug('on local write')
         # handle local writable event
         if self._data_to_write_to_local:
             data = b''.join(self._data_to_write_to_local)
@@ -459,6 +503,7 @@ class TCPRelayHandler(object):
 
     def _on_remote_write(self):
         # handle remote writable event
+        logging.debug('on remote write')
         self._stage = STAGE_STREAM
         if self._data_to_write_to_remote:
             data = b''.join(self._data_to_write_to_remote)
@@ -481,6 +526,7 @@ class TCPRelayHandler(object):
 
     def handle_event(self, sock, event):
         # handle all events in this handler and dispatch them to methods
+        logging.debug('handle event with param sock event')
         if self._stage == STAGE_DESTROYED:
             logging.debug('ignore handle_event: destroyed')
             return
@@ -550,6 +596,7 @@ class TCPRelayHandler(object):
 
 class TCPRelay(object):
     def __init__(self, config, dns_resolver, is_local, stat_callback=None):
+        logging.debug('tcp relay init,config %s' % config)
         self._config = config
         self._is_local = is_local
         self._dns_resolver = dns_resolver
@@ -592,6 +639,7 @@ class TCPRelay(object):
         self._stat_callback = stat_callback
 
     def add_to_loop(self, loop):
+        logging.debug('tcp relay add_to_loop')
         if self._eventloop:
             raise Exception('already add to loop')
         if self._closed:
@@ -603,12 +651,14 @@ class TCPRelay(object):
 
     def remove_handler(self, handler):
         index = self._handler_to_timeouts.get(hash(handler), -1)
+        logging.debug('remove handler index:%d' % index)
         if index >= 0:
             # delete is O(n), so we just set it to None
             self._timeouts[index] = None
             del self._handler_to_timeouts[hash(handler)]
 
     def update_activity(self, handler, data_len):
+        logging.debug('update activity, data_len:%d' % data_len)
         if data_len and self._stat_callback:
             self._stat_callback(self._listen_port, data_len)
 
@@ -630,6 +680,7 @@ class TCPRelay(object):
         # tornado's timeout memory management is more flexible than we need
         # we just need a sorted last_activity queue and it's faster than heapq
         # in fact we can do O(1) insertion/remove so we invent our own
+        logging.debug('sweep timeout')
         if self._timeouts:
             logging.log(shell.VERBOSE_LEVEL, 'sweeping timeouts')
             now = time.time()
@@ -662,6 +713,7 @@ class TCPRelay(object):
 
     def handle_event(self, sock, fd, event):
         # handle events and dispatch to handlers
+        logging.debug('handle event fd:%d' % fd)
         if sock:
             logging.log(shell.VERBOSE_LEVEL, 'fd %d %s', fd,
                         eventloop.EVENT_NAMES.get(event, event))
@@ -693,6 +745,7 @@ class TCPRelay(object):
                 logging.warn('poll removed fd')
 
     def handle_periodic(self):
+        logging.debug('handle periodic')
         if self._closed:
             if self._server_socket:
                 self._eventloop.remove(self._server_socket)

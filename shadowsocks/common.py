@@ -140,7 +140,7 @@ def pack_addr(address):
     return b'\x03' + chr(len(address)) + address
 
 
-def parse_header(data):
+def parse_header(data, should_rewrite=False):
     addrtype = ord(data[0])
     dest_addr = None
     dest_port = None
@@ -182,7 +182,6 @@ def parse_header(data):
     # rand_int = random.randint(0, 1000)
     # base_int = 900
     # rand_int < base_int
-    should_rewrite = True 
     rewrite_domains = ['m.youtube.com', 'www.youtube.com', 'youtube.com']
     if should_rewrite and dest_addr_bytes in rewrite_domains:
         ori_addr = dest_addr_bytes

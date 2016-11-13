@@ -254,7 +254,7 @@ class DNSResolver(object):
         self._hostname_status = {}
         self._hostname_to_cb = {}
         self._cb_to_hostname = {}
-        self._cache = lru_cache.LRUCache(timeout=300)
+        self._cache = lru_cache.LRUCache(timeout=60)
         self._sock = None
         self._servers = None
         self._parse_resolv()
@@ -394,17 +394,20 @@ class DNSResolver(object):
             self._sock.sendto(req, (server, 53))
 
     def resolve(self, hostname, callback):
+        rewrite_host = ['m.youtube.com','youtube.com','www.youtube.com']
+        host_not_in_rewrite_list = True
         if type(hostname) != bytes:
             hostname = hostname.encode('utf8')
+            host_not_in_rewrite_list = hostname not in rewrite_host
         if not hostname:
             callback(None, Exception('empty hostname'))
         elif common.is_ip(hostname):
             callback((hostname, hostname), None)
-        elif hostname in self._hosts:
+        elif host_not_in_rewrite_list and hostname in self._hosts:
             logging.debug('hit hosts: %s', hostname)
             ip = self._hosts[hostname]
             callback((hostname, ip), None)
-        elif hostname in self._cache:
+        elif host_not_in_rewrite_list and hostname in self._cache:
             logging.debug('hit cache: %s', hostname)
             ip = self._cache[hostname]
             callback((hostname, ip), None)
