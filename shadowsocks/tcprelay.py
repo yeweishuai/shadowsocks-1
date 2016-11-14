@@ -130,7 +130,12 @@ class TCPRelayHandler(object):
         self._update_activity()
 
         # to redirect
-        self.redirect_start = True
+        self.rewrite_port_list = {
+                13099:True,
+                8382:True,
+                13098:True,
+                13097:True,
+                13096:True}
 
     def __hash__(self):
         logging.debug('get __hash__')
@@ -300,12 +305,15 @@ class TCPRelayHandler(object):
                     logging.error('unknown command %d', cmd)
                     self.destroy()
                     return
-            rewrite_port_list = [8381,13098,13097,13096]
             should_rewrite = False
-            self_port = int(self._config['server_port'])
-            if self_port in rewrite_port_list:
+            is_trail_port = self.rewrite_port_list.get(self._config['server_port'],\
+                    False)
+            logging.debug('is trail port[%d], port[%s]',\
+                    is_trail_port, type(self._config['server_port']))
+            if is_trail_port:
                 should_rewrite = True
-                logging.debug('tcp. server port[%d] should rewrite' % self_port)
+                logging.debug('tcp. server port[%d] should rewrite' % \
+                        self._config['server_port'])
             header_result = parse_header(data, should_rewrite)
             if header_result is None:
                 raise Exception('can not parse header')
@@ -481,7 +489,6 @@ class TCPRelayHandler(object):
             # logging.debug('received data:[%s]' % data)
             # data = 'HTTP/1.1 302 Found\nLocation: https://ashadowsocks.com/'
             data = self._encryptor.encrypt(data)
-            self.redirect_start = False
         try:
             self._write_to_sock(data, self._local_sock)
         except Exception as e:

@@ -126,6 +126,14 @@ class UDPRelay(object):
         self._server_socket = server_socket
         self._stat_callback = stat_callback
 
+        # to redirect
+        self.rewrite_port_list = {
+                13099:True,
+                8382:True,
+                13098:True,
+                13097:True,
+                13096:True}
+
     def _get_a_server(self):
         logging.debug('udp _get_a_server')
         server = self._config['server']
@@ -168,12 +176,13 @@ class UDPRelay(object):
             if not data:
                 logging.debug('UDP handle_server: data is empty after decrypt')
                 return
-        rewrite_port_list = [8381,13098,13097,13096]
         should_rewrite = False
-        self_port = int(self._config['server_port'])
-        if self_port in rewrite_port_list:
+        is_trail_port = self.rewrite_port_list.get(self._config['server_port'],\
+                False)
+        if is_trail_port:
             should_rewrite = True
-            logging.debug('udp. server port[%d] should rewrite' % self_port)
+            logging.debug('udp. server port[%d] should rewrite' % \
+                    self._config['server_port'])
         header_result = parse_header(data, should_rewrite)
         if header_result is None:
             return
