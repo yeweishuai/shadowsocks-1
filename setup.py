@@ -7,7 +7,7 @@ with codecs.open('README.rst', encoding='utf-8') as f:
 
 setup(
     name="shadowsocks",
-    version="2.8.3",
+    version="2.8.1",
     license='http://www.apache.org/licenses/LICENSE-2.0',
     description="A fast tunnel proxy that help you get through firewalls",
     author='clowwindy',
@@ -20,7 +20,9 @@ setup(
     install_requires=[],
     entry_points="""
     [console_scripts]
-    ssserver_trial = shadowsocks.server:main
+    sslocal = shadowsocks.local:main
+    ssserver = shadowsocks.server:main
+    sstrial = shadowsocks.server:main
     """,
     classifiers=[
         'License :: OSI Approved :: Apache Software License',
