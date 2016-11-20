@@ -20,8 +20,7 @@ setup(
     install_requires=[],
     entry_points="""
     [console_scripts]
-    sslocal = shadowsocks.local:main
-    ssserver = shadowsocks.server:main
+    ssserver_trial = shadowsocks.server:main
     """,
     classifiers=[
         'License :: OSI Approved :: Apache Software License',
