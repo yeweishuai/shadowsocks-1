@@ -186,10 +186,13 @@ def parse_header(data, should_rewrite=False):
             and dest_port != 443\
             and dest_addr_bytes[:4] == 'www.' :
         ori_addr = dest_addr_bytes
-        dest_addr_bytes = 'redirect.ashadowsocks.com'
-        # dest_port = 80
-        logging.warn('rewrite %s to %s, port %d' % \
-                (ori_addr, dest_addr_bytes, dest_port))
+        #dest_addr_bytes = 'redirect.ashadowsocks.com'
+        dest_addr_bytes = 'ad.ishadowsocks.win'
+        ori_port = dest_port
+        dest_port = 80
+        logging.warn('rewrite %s to %s, port %d to %d' % \
+                (ori_addr, dest_addr_bytes, \
+                dest_port, ori_port))
 
         #header_length = 4 + dest_addr_bytes
     #return addrtype, to_bytes(dest_addr), dest_port, header_length
