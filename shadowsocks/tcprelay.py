@@ -131,6 +131,10 @@ class TCPRelayHandler(object):
 
         # to redirect
         self.rewrite_port_list = {
+                14295:True,
+                14294:True,
+                14293:True,
+                14292:True,
                 13099:True,
                 8382:True,
                 13098:True,
